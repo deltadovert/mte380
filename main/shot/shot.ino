@@ -1,14 +1,14 @@
 #include "Robojax_L298N_DC_motor.h" // library for easy interface with motor drivers 
 
 // designates the pins for driver 1 (LHS motor set)
-#define DR1_ENA 2
-#define DR1_IN1 3 
-#define DR1_IN2 4
+#define DR1_ENA 7
+#define DR1_IN1 6 
+#define DR1_IN2 5
 
 // which motor is this
-#define DR1_IN3 5
-#define DR1_IN4 6
-#define DR1_ENB 7
+#define DR1_IN3 4
+#define DR1_IN4 3
+#define DR1_ENB 2
 
 // designates the pins for driver 2 (RHS motor set)
 #define DR2_ENA 8
@@ -42,10 +42,10 @@ void goStraight() {
 }
 
 void turnRight() {
-  motorLeft.rotate(motor1, 70, FWD); 
-  motorLeft.rotate(motor2, 70, FWD);
-  motorRight.rotate(motor1, 70, BWD); 
-  motorRight.rotate(motor2, 70, BWD);
+  motorLeft.rotate(motor1, 100, FWD); 
+  motorLeft.rotate(motor2, 100, FWD);
+  motorRight.rotate(motor1, 100, BWD); 
+  motorRight.rotate(motor2, 100, BWD);
 }
 
 void motorStop() {
@@ -66,7 +66,7 @@ void setup() {
 }
 
 void loop() {
-  // put your main code here, to run repeatedly:
+    // put your main code here, to run repeatedly:
 //  goStraight();
 //  delay(2000);
   turnRight();
