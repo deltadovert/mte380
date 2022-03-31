@@ -77,8 +77,8 @@ void readData() {
   // read gyro
   if (IMU.dataReady()) {
     IMU.getAGMT();
-    if (abs(IMU.gyrY()) > 6) {
-      yawAngle += IMU.gyrY() * (millis() - prevTime) / 1000;
+    if (abs(IMU.gyrZ()) > 6) {
+      yawAngle += IMU.gyrZ() * (millis() - prevTime) / 1000;
     }
   }
   prevTime = millis(); 
@@ -104,8 +104,15 @@ bool turn = true;
 bool turnInitiated = false; 
 float initialAngle = 0;
 
+bool firstTime = true; 
+
 void loop()
 {
+  if (firstTime) {
+    delay(2000);
+    firstTime = false; 
+  }
+  
   readData(); 
   
   // if distance to wall <= TARGET
@@ -119,7 +126,7 @@ void loop()
     }
 
     else {
-      if (yawAngle - initialAngle >= 90) {
+      if (abs(yawAngle - initialAngle) >= 78) {
         stopMotors();
         turn = false;
         turnInitiated = false; 
@@ -129,9 +136,9 @@ void loop()
     
   }
 
-  else {
+  /*else {
     delay(2000); 
     turn = true;
-  }
+  }*/
   
 }

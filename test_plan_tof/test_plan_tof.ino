@@ -69,8 +69,8 @@ void readData(float &frontDistance) {
 }
 
 void startMotors() {
-  motorLeft.rotate(motor1, 25, FWD);
-  motorLeft.rotate(motor2, 25, FWD);
+  motorLeft.rotate(motor1, 55, FWD);
+  motorLeft.rotate(motor2, 55, FWD);
   motorRight.rotate(motor1, 100, FWD);
   motorRight.rotate(motor2, 100, FWD);
 }
@@ -82,13 +82,13 @@ void stopMotors() {
   motorRight.rotate(motor2, 0, FWD);
 }
 
-float target = 200; 
+float target = 300; 
+bool firstTime = true;
 float frontDistance = 1000;
 
 void loop()
 {
-  readData(frontDistance); 
-  
+  delay(100);  
   // if distance to wall <= TARGET
   // set turn to true
   
@@ -98,11 +98,16 @@ void loop()
   }
 
   else {
-    Serial.print("Distance: ");
-    Serial.println(frontDistance);
-    if (frontDistance <= target) {
-      stopMotors();
+    if (firstTime) {
+      delay(500);
+      firstTime = false; 
     }
+    //readData(frontDistance);
+    //Serial.print("Distance: ");
+    //Serial.println(frontDistance);
+    delay(6000);
+    stopMotors();
+    
   }
   
 }
