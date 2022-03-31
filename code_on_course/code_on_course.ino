@@ -3,7 +3,6 @@
 #include "Robojax_L298N_DC_motor.h"
 #include "ICM_20948.h" // Click here to get the library: http://librarymanager/All#SparkFun_ICM_20948_IMU
 
-VL53L0X FrontTOF;
 VL53L0X LeftFrontTOF;
 VL53L0X LeftBackTOF; 
 
@@ -33,6 +32,9 @@ ICM_20948_I2C IMU;
 #define motor1 1
 #define motor2 2
 
+#define TRIG 50
+#define ECHO 52
+
 const int FWD = 2;
 const int BWD = 1; 
 
@@ -41,12 +43,12 @@ Robojax_L298N_DC_motor motorRight(DR2_IN1, DR2_IN2, DR2_ENA, DR2_IN3, DR2_IN4, D
 
 void setup()
 {
+  pinMode(TRIG, OUTPUT);
+  pinMode(ECHO, INPUT);
   pinMode(32, OUTPUT);
   pinMode(30, OUTPUT);
-  pinMode(28, OUTPUT);
   digitalWrite(32, LOW);
   digitalWrite(30, LOW);
-  digitalWrite(28, LOW);
 
   delay(500);
   Wire.begin();
@@ -55,21 +57,15 @@ void setup()
 
   pinMode(30, INPUT);
   delay(150);
-  LeftFrontTOF.init(true);
+  LeftBackTOF.init(true);
   delay(100);
-  LeftFrontTOF.setAddress(0x70);
-
-  pinMode(28, INPUT);
-  delay(150);
-  FrontTOF.init(true);
-  delay(100);
-  FrontTOF.setAddress(0x33);
+  LeftBackTOF.setAddress(0x70);
 
   pinMode(32, INPUT);
   delay(150); 
-  LeftBackTOF.init(true);
+  LeftFrontTOF.init(true);
   delay(100);
-  LeftBackTOF.setAddress(0x37); 
+  LeftFrontTOF.setAddress(0x45); 
 
   motorLeft.begin();
   motorRight.begin();
@@ -92,7 +88,6 @@ void setup()
     }
   }
 
-  FrontTOF.startContinuous();
   LeftFrontTOF.startContinuous();
   LeftBackTOF.startContinuous();
 }
@@ -121,6 +116,26 @@ void readGyro() {
     prevTime = millis(); 
     //Serial.println(yawAngle);
   }
+}
+
+long duration;
+float frontDistance;
+
+void usReading() {
+  digitalWrite(TRIG, LOW);
+  delayMicroseconds(2);
+  // Sets the trigPin on HIGH state for 10 micro seconds
+  digitalWrite(TRIG, HIGH);
+  delayMicroseconds(10);
+  digitalWrite(TRIG, LOW);
+  // Reads the echoPin, returns the sound wave travel time in microseconds
+  duration = pulseIn(ECHO, HIGH);
+  // Calculating the distance
+  frontDistance = duration * 0.034 / 2;
+  // Prints the distance on the Serial Monitor
+  Serial.print("Distance: ");
+  Serial.println(frontDistance);
+
 }
 
 void correctLeft() {
@@ -154,17 +169,30 @@ void motorStop() {
 float tof_front_dist_filtered = 0;
 float tof_left_dist_filtered = 0;
 
-int tof_front_offset = 35; // 35
-int tof_left_offset = 62; //62
+int LB_OFFSET = 62; // 35
+int LF_OFFSET = 35; //62
+int FRONT_OFFSET = 50;
+int LF_BACK = 20; 
 
-int lf_lb_dist = 40; 
-
-float frontDistance = 0;
+float lf_dist = 0;
+float lb_dist = 0;
 
 float initialAngle = 0;
 
 void processData() {
-    frontDistance = FrontTOF.readRangeContinuousMillimeters(); 
+  lf_dist = LeftFrontTOF.readRangeContinuousMillimeters();
+  lb_dist = LeftBackTOF.readRangeContinuousMillimeters();
+
+  if (lf_dist - LF_OFFSET < 0) {
+    lf_dist = 0;
+  } else {
+    lf_dist = lf_dist - LF_OFFSET - LF_BACK;
+  }
+  if (lb_dist - LB_OFFSET < 0) {
+    lb_dist = 0;
+  } else {
+    lb_dist = lb_dist - LB_OFFSET;
+  }
 }
 
 void reInitTOF(VL53L0X &TOF, int XSHUT, int ADDRESS) {
@@ -187,7 +215,7 @@ bool stoponeseconds = false;
 
 bool readFront = true;
 
-int stopDistances[6] = {250, 250, 250, 450, 450, 450};
+int stopDistances[6] = {500, 250, 250, 450, 450, 450};
 int turn = 0;
 
 void loop()
@@ -199,14 +227,15 @@ void loop()
     startUp = false;
   }
 
+  usReading();
   processData();
   readGyro();
 
-  Serial.print("Left front reading: ");
-  Serial.println(LeftFrontTOF.readRangeContinuousMillimeters());
-  Serial.print("Left back reading: ");
-  Serial.println(LeftBackTOF.readRangeContinuousMillimeters());
-  Serial.println(" ");
+  //Serial.print("front reading: ");
+  //Serial.println(frontDistance);
+  //Serial.print("Left back reading: ");
+  //Serial.println(lb_dist);
+  //Serial.println(" ");
 
  // Serial.println(average);
   if (frontDistance <= stopDistances[turn] && frontDistance > 0 && readFront) {
