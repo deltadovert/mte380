@@ -2,12 +2,15 @@
 #include <VL53L0X.h>
 #include "Robojax_L298N_DC_motor.h"
 #include "ICM_20948.h" // Click here to get the library: http://librarymanager/All#SparkFun_ICM_20948_IMU
+#include "SR04.h"
+#define TRIG_PIN 40
+#define ECHO_PIN 42
+SR04 Ultrasonic = SR04(ECHO_PIN,TRIG_PIN);
 
 VL53L0X LeftFrontTOF;
 VL53L0X LeftBackTOF; 
 
 ICM_20948_I2C IMU;
-
 
 // front left motor
 #define DR1_ENA 7
@@ -41,8 +44,7 @@ const int BWD = 1;
 Robojax_L298N_DC_motor motorLeft(DR1_IN1, DR1_IN2, DR1_ENA, DR1_IN3, DR1_IN4, DR1_ENB, false); // the boolean argument enables debugging when true
 Robojax_L298N_DC_motor motorRight(DR2_IN1, DR2_IN2, DR2_ENA, DR2_IN3, DR2_IN4, DR2_ENB, false);
 
-void setup()
-{
+void setup() {
   pinMode(TRIG, OUTPUT);
   pinMode(ECHO, INPUT);
   pinMode(32, OUTPUT);
@@ -71,8 +73,7 @@ void setup()
   motorRight.begin();
 
   bool initialized = false;
-  while (!initialized)
-  {
+  while (!initialized) {
     IMU.begin(Wire, 1);
 
     Serial.print(F("Initialization of the sensor returned: "));
@@ -122,20 +123,7 @@ long duration;
 float frontDistance;
 
 void usReading() {
-  digitalWrite(TRIG, LOW);
-  delayMicroseconds(2);
-  // Sets the trigPin on HIGH state for 10 micro seconds
-  digitalWrite(TRIG, HIGH);
-  delayMicroseconds(10);
-  digitalWrite(TRIG, LOW);
-  // Reads the echoPin, returns the sound wave travel time in microseconds
-  duration = pulseIn(ECHO, HIGH);
-  // Calculating the distance
-  frontDistance = duration * 0.034 / 2;
-  // Prints the distance on the Serial Monitor
-  Serial.print("Distance: ");
-  Serial.println(frontDistance);
-
+  frontDistance = Ultrasonic.Distance();
 }
 
 void correctLeft() {
@@ -215,7 +203,10 @@ bool stoponeseconds = false;
 
 bool readFront = true;
 
-int stopDistances[6] = {500, 250, 250, 450, 450, 450};
+// told it to stop 25 cm away (23 really bc of offset)
+// stopped 15 cm away. Stopping distance ~= 8cm (on tile)
+// get stopping distance for course terrain
+int stopDistances[6] = {25, 25, 25, 47, 47, 47};
 int turn = 0;
 
 void loop()
@@ -242,6 +233,7 @@ void loop()
     motorStop();
     startedTurn = true; 
     readFront = false;
+    Serial.println("Stopping");
   }
 
   if (startedTurn) {
@@ -259,7 +251,6 @@ void loop()
   }
 
   if (turning) {
-    //Serial.println("In turning");
     //Serial.println(yawAngle - initialAngle);
     if (abs(yawAngle - initialAngle) >= 85) {
        motorStop();
@@ -269,6 +260,7 @@ void loop()
        readFront = true;
        turn++;
        delay(500);
+       Serial.println("Done turn");
     }
   }
 }

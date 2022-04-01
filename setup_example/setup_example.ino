@@ -5,33 +5,37 @@
 #endif
 #include "ArduPID.h"
 
-#include <VL53L0X.h>
 #include "Robojax_L298N_DC_motor.h"
 #include "Wire.h"
+#include "SR04.h"
 
-VL53L0X FrontTOF;
-VL53L0X LeftFrontTOF;
-VL53L0X LeftBackTOF; 
+#define TRIG_FRONT 28
+#define ECHO_FRONT 26
+#define TRIG_LEFT 32
+#define ECHO_LEFT 30
+
+SR04 UltrasonicLeft = SR04(ECHO_LEFT, TRIG_LEFT); 
+SR04 UltrasonicFront = SR04(ECHO_FRONT, TRIG_FRONT);
 
 // front left motor
-#define DR1_ENA 7
-#define DR1_IN1 6 
-#define DR1_IN2 5
+#define DR1_ENA 13
+#define DR1_IN1 12
+#define DR1_IN2 11
 
 // back left motor
-#define DR1_IN3 4
-#define DR1_IN4 3
-#define DR1_ENB 2
+#define DR1_IN3 10
+#define DR1_IN4 9
+#define DR1_ENB 8
 
 // back right
-#define DR2_ENA 8
-#define DR2_IN1 9
-#define DR2_IN2 10
+#define DR2_ENA 2
+#define DR2_IN1 3
+#define DR2_IN2 4
 
 // front right
-#define DR2_IN3 11
-#define DR2_IN4 12
-#define DR2_ENB 13
+#define DR2_IN3 5
+#define DR2_IN4 6
+#define DR2_ENB 7
 
 #define motor1 1
 #define motor2 2
@@ -48,62 +52,27 @@ int right_motor_power = 50;
 // PID Controllers
 ArduPID adjustController;
 
-double adjust_setpoint = 100;
+double adjust_setpoint = 30;
 double adjust_input;
 double adjust_output;
-double adjust_p = 3;
-double adjust_i = 1;
-double adjust_d = 1.5;
+double adjust_p = 100;
+double adjust_i = 0;
+double adjust_d = 0;
 
 
 void setup() {
   adjustController.begin(&adjust_input, &adjust_output, &adjust_setpoint, adjust_p, adjust_i, adjust_d);
-  adjustController.setOutputLimits(-255, 255);
+  adjustController.setOutputLimits(-50, 50);
   adjustController.setWindUpLimits(-10, 10);
   adjustController.start();
-  
-  pinMode(32, OUTPUT);
-  pinMode(30, OUTPUT);
-  pinMode(28, OUTPUT);
-  digitalWrite(32, LOW);
-  digitalWrite(30, LOW);
-  digitalWrite(28, LOW);
 
   delay(500);
-  Wire.begin();
 
   Serial.begin (115200);
 
-  pinMode(30, INPUT);
-  delay(150);
-  LeftBackTOF.init(true);
-  delay(100);
-  LeftBackTOF.setAddress(0x70);
-
-  pinMode(28, INPUT);
-  delay(150);
-  FrontTOF.init(true);
-  delay(100);
-  FrontTOF.setAddress(0x33);
-
-  pinMode(32, INPUT);
-  delay(150); 
-  LeftFrontTOF.init(true);
-  delay(100);
-  LeftFrontTOF.setAddress(0x45); 
-
   motorLeft.begin();
   motorRight.begin();
-
-  FrontTOF.startContinuous();
-  LeftFrontTOF.startContinuous();
-  LeftBackTOF.startContinuous();
 }
-
-int normalizedControllerOutput() {
-  return map(adjust_output, -255, 255, -100, 100);
-}
-
 
 void motorStart(int speedLeft, int speedRight) {
   motorLeft.rotate(motor1, speedLeft, FWD);
@@ -113,26 +82,35 @@ void motorStart(int speedLeft, int speedRight) {
 }
   
 void loop() {
-  adjust_input = LeftBackTOF.readRangeSingleMillimeters() - 62;
-  Serial.println("tof val");
+  adjust_input = UltrasonicLeft.Distance();
+  Serial.print("Input: ");
   Serial.println(adjust_input);
   adjustController.compute();
-  Serial.println("pid output: ");
-  Serial.print(adjust_output);
-  Serial.print(" ");
-  Serial.print(adjust_input);
+  Serial.print("pid output: ");
+  Serial.println(adjust_output);
 
-  left_motor_power = 65;
-  right_motor_power = 65;
+  left_motor_power = 50;
+  right_motor_power = 50;
 
   
  //   Serial.println("Pitch: ");
     //Serial.println(imu.getRoll());
-  float PID_output = adjust_output / 255.0;
-  left_motor_power += 20*PID_output;  
-  right_motor_power -= 20*PID_output;
+  float PID_output = adjust_output;
+  left_motor_power += PID_output;  
+  right_motor_power -= PID_output;
+  if (left_motor_power < 0) {
+    left_motor_power = 0;
+  }
+  if (left_motor_power > 100) {
+    left_motor_power = 100;
+  }
+  if (right_motor_power < 0) {
+    right_motor_power = 0;
+  }
+  if (right_motor_power > 100) {
+    right_motor_power = 100;
+  }
   motorStart(left_motor_power, right_motor_power);
   // normalize PID output
-  float mapped_controller_output = normalizedControllerOutput();
   
 }
