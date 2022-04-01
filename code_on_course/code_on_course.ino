@@ -95,6 +95,7 @@ float yawAngle = 0;
 
 float prevTime = millis();
 
+float pitchRate = 0;
 
 void readGyro() { 
   // read ToF
@@ -107,6 +108,8 @@ void readGyro() {
     }
     prevTime = millis(); 
   }
+  pitchRate = IMU.gyrX();
+ // Serial.println(IMU.gyrX());
 }
 
 void turnRight() {
@@ -142,15 +145,18 @@ bool stoponeseconds = false;
 
 bool readFront = true;
 
-int stopDistances[6] = {25, 25, 25, 47, 47, 47}; // these distances might be fucked 
-int sideSetpoints[6] = {5.08, 5.08, 5.08, 35.56, 35.56}; // 66.04
-int turn = 0;
+int stopDistances[7] = {25, 25, 25, 60, 47, 47, 47}; // these distances might be fucked 
+// int stopDistances[11] = {25, 25, 25, 55.5, 55.5, 55.5, }
+int sideSetpoints[8] = {5.08, 5.08, 5.08, 5.08, 35, 35, 35, 35}; 
+//turn =/ 66.04
+// int sideSetpoints[11] = {5.08, 5.08, 5.08, 5.08, 35.56, 35.56, 35.56, 35.56, 66.04, 66.04, 66.04}; // 66.04
+int turn = 4; 
 
-void straighten() {
+void straighten(int speedLeft, int speedRight) {
   adjust_input = UltrasonicLeft.Distance();
   adjustController.compute();
-  left_motor_power = 100;
-  right_motor_power = 100;
+  left_motor_power = speedLeft;
+  right_motor_power = speedRight;
   left_motor_power += adjust_output;  
   right_motor_power -= adjust_output;
   if (left_motor_power < 0) {
@@ -168,16 +174,42 @@ void straighten() {
   motorStart(left_motor_power, right_motor_power);
 }
 
+bool inPit = false;
+
+bool isStraightening = true; 
+bool setSetpoint = true;
+
 void loop() {
-  if (readFront) {
-    straighten();
+  if (setSetpoint) {
+    adjustController.stop();
+    adjust_setpoint = sideSetpoints[turn];
+    adjustController.begin(&adjust_input, &adjust_output, &adjust_setpoint, adjust_p, adjust_i, adjust_d);
+    adjustController.start();
   }
+  
   readGyro();
+  Serial.println(UltrasonicLeft.Distance());
+  if (turn == 3) {
+    //motorStart(80,80);
+    // if it's the third turn 
+    // don't read the sensor for a while
+    // but straighten 
+    delay(800);
+  }
+
+  if (isStraightening) {
+    if (turn >= 3) {
+      straighten(100,100);
+    } else {
+      straighten(100,100);
+    }
+  }
 
   if (UltrasonicFront.Distance() <= stopDistances[turn] && UltrasonicFront.Distance() > 0 && readFront) {
     motorStop();
     startedTurn = true; 
     readFront = false;
+    isStraightening = false;
   }
 
   if (startedTurn) {
@@ -187,21 +219,34 @@ void loop() {
     stoponeseconds = true;
   }
 
-  if (stoponeseconds && (millis() - timeStarted >= 1000)) {
+  if (stoponeseconds && (millis() - timeStarted >= 500)) {
     turnRight();
     turning = true;
     stoponeseconds = false;
   }
 
   if (turning) {
-    if (abs(yawAngle - initialAngle) >= 80) {
+    if (abs(yawAngle - initialAngle) >= 73) {
        motorStop();
-       //reInitTOF(FrontTOF, 28, 0x33);
        turning = false; 
        startUp = true;
        readFront = true;
        turn++;
-       adjust_setpoint = sideSetpoints[turn];
+       isStraightening = true;
+       setSetpoint = true;
+       //bool initialized = false;
+//       while (!initialized) {
+//        IMU.begin(Wire, 1);
+//    
+//        //Serial.print(F("Initialization of the sensor returned: "));
+//        //Serial.println(IMU.statusString());
+//        if (IMU.status != ICM_20948_Stat_Ok) {
+//          delay(500);
+//        }
+//        else {
+//          initialized = true;
+//        }
+//      }
        delay(500);
     }
   }
