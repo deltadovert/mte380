@@ -3,34 +3,36 @@
 #include "Robojax_L298N_DC_motor.h"
 #include "ICM_20948.h" // Click here to get the library: http://librarymanager/All#SparkFun_ICM_20948_IMU
 #include "SR04.h"
-#define TRIG_PIN 40
-#define ECHO_PIN 42
-SR04 Ultrasonic = SR04(ECHO_PIN,TRIG_PIN);
+#include "ArduPID.h"
+#define TRIG_FRONT 28
+#define ECHO_FRONT 26
+#define TRIG_LEFT 32
+#define ECHO_LEFT 30
 
-VL53L0X LeftFrontTOF;
-VL53L0X LeftBackTOF; 
+SR04 UltrasonicLeft = SR04(ECHO_LEFT, TRIG_LEFT); 
+SR04 UltrasonicFront = SR04(ECHO_FRONT, TRIG_FRONT);
 
 ICM_20948_I2C IMU;
 
 // front left motor
-#define DR1_ENA 7
-#define DR1_IN1 6 
-#define DR1_IN2 5
+#define DR1_ENA 13
+#define DR1_IN1 12
+#define DR1_IN2 11
 
 // back left motor
-#define DR1_IN3 4
-#define DR1_IN4 3
-#define DR1_ENB 2
+#define DR1_IN3 10
+#define DR1_IN4 9
+#define DR1_ENB 8
 
 // back right
-#define DR2_ENA 8
-#define DR2_IN1 9
-#define DR2_IN2 10
+#define DR2_ENA 2
+#define DR2_IN1 3
+#define DR2_IN2 4
 
 // front right
-#define DR2_IN3 11
-#define DR2_IN4 12
-#define DR2_ENB 13
+#define DR2_IN3 5
+#define DR2_IN4 6
+#define DR2_ENB 7
 
 #define motor1 1
 #define motor2 2
@@ -44,30 +46,29 @@ const int BWD = 1;
 Robojax_L298N_DC_motor motorLeft(DR1_IN1, DR1_IN2, DR1_ENA, DR1_IN3, DR1_IN4, DR1_ENB, false); // the boolean argument enables debugging when true
 Robojax_L298N_DC_motor motorRight(DR2_IN1, DR2_IN2, DR2_ENA, DR2_IN3, DR2_IN4, DR2_ENB, false);
 
+int left_motor_power = 50;
+int right_motor_power = 50;
+
+// PID Controllers
+ArduPID adjustController;
+
+double adjust_setpoint = 5.08;
+double adjust_input;
+double adjust_output;
+double adjust_p = 500;
+double adjust_i = 1000;
+double adjust_d = 10000;
+
 void setup() {
-  pinMode(TRIG, OUTPUT);
-  pinMode(ECHO, INPUT);
-  pinMode(32, OUTPUT);
-  pinMode(30, OUTPUT);
-  digitalWrite(32, LOW);
-  digitalWrite(30, LOW);
+  adjustController.begin(&adjust_input, &adjust_output, &adjust_setpoint, adjust_p, adjust_i, adjust_d);
+  adjustController.setOutputLimits(-50, 50);
+  adjustController.setWindUpLimits(-10, 10);
+  adjustController.start();
 
   delay(500);
   Wire.begin();
 
   Serial.begin (115200);
-
-  pinMode(30, INPUT);
-  delay(150);
-  LeftBackTOF.init(true);
-  delay(100);
-  LeftBackTOF.setAddress(0x70);
-
-  pinMode(32, INPUT);
-  delay(150); 
-  LeftFrontTOF.init(true);
-  delay(100);
-  LeftFrontTOF.setAddress(0x45); 
 
   motorLeft.begin();
   motorRight.begin();
@@ -76,11 +77,11 @@ void setup() {
   while (!initialized) {
     IMU.begin(Wire, 1);
 
-    Serial.print(F("Initialization of the sensor returned: "));
-    Serial.println(IMU.statusString());
+    //Serial.print(F("Initialization of the sensor returned: "));
+    //Serial.println(IMU.statusString());
     if (IMU.status != ICM_20948_Stat_Ok)
     {
-      Serial.println("Trying again...");
+      //Serial.println("Trying again...");
       delay(500);
     }
     else
@@ -88,22 +89,12 @@ void setup() {
       initialized = true;
     }
   }
-
-  LeftFrontTOF.startContinuous();
-  LeftBackTOF.startContinuous();
 }
-
-//float angleWrtWall() {
-////  return ()
-//}
 
 float yawAngle = 0;
 
 float prevTime = millis();
 
-float totalYawRate = 0;
-int iterYaw = 0;
-float averageYaw = 0;
 
 void readGyro() { 
   // read ToF
@@ -115,22 +106,7 @@ void readGyro() {
       yawAngle += IMU.gyrZ() * (millis() - prevTime) / 1000;
     }
     prevTime = millis(); 
-    //Serial.println(yawAngle);
   }
-}
-
-long duration;
-float frontDistance;
-
-void usReading() {
-  frontDistance = Ultrasonic.Distance();
-}
-
-void correctLeft() {
-  motorLeft.rotate(motor1, 80, BWD);
-  motorLeft.rotate(motor2, 80, BWD);
-  motorRight.rotate(motor1, 0, FWD);
-  motorRight.rotate(motor2, 0, FWD);
 }
 
 void turnRight() {
@@ -154,44 +130,7 @@ void motorStop() {
   motorRight.rotate(motor2, 0, FWD);
 }
 
-float tof_front_dist_filtered = 0;
-float tof_left_dist_filtered = 0;
-
-int LB_OFFSET = 62; // 35
-int LF_OFFSET = 35; //62
-int FRONT_OFFSET = 50;
-int LF_BACK = 20; 
-
-float lf_dist = 0;
-float lb_dist = 0;
-
 float initialAngle = 0;
-
-void processData() {
-  lf_dist = LeftFrontTOF.readRangeContinuousMillimeters();
-  lb_dist = LeftBackTOF.readRangeContinuousMillimeters();
-
-  if (lf_dist - LF_OFFSET < 0) {
-    lf_dist = 0;
-  } else {
-    lf_dist = lf_dist - LF_OFFSET - LF_BACK;
-  }
-  if (lb_dist - LB_OFFSET < 0) {
-    lb_dist = 0;
-  } else {
-    lb_dist = lb_dist - LB_OFFSET;
-  }
-}
-
-void reInitTOF(VL53L0X &TOF, int XSHUT, int ADDRESS) {
-  pinMode(XSHUT, OUTPUT);
-  digitalWrite(XSHUT, LOW);
-  pinMode(XSHUT, INPUT);
-  delay(150);
-  TOF.init(true);
-  TOF.setAddress(ADDRESS);
-  TOF.startContinuous();
-}
 
 bool startUp = true; 
 bool startedTurn = false; 
@@ -203,43 +142,47 @@ bool stoponeseconds = false;
 
 bool readFront = true;
 
-// told it to stop 25 cm away (23 really bc of offset)
-// stopped 15 cm away. Stopping distance ~= 8cm (on tile)
-// get stopping distance for course terrain
-int stopDistances[6] = {25, 25, 25, 47, 47, 47};
+int stopDistances[6] = {25, 25, 25, 47, 47, 47}; // these distances might be fucked 
+int sideSetpoints[6] = {5.08, 5.08, 5.08, 35.56, 35.56}; // 66.04
 int turn = 0;
 
-void loop()
-{
-  if (startUp) {
-    motorStart(100, 100);
-    delay(500);
-    motorStart(55, 100); 
-    startUp = false;
+void straighten() {
+  adjust_input = UltrasonicLeft.Distance();
+  adjustController.compute();
+  left_motor_power = 100;
+  right_motor_power = 100;
+  left_motor_power += adjust_output;  
+  right_motor_power -= adjust_output;
+  if (left_motor_power < 0) {
+    left_motor_power = 0;
   }
+  if (left_motor_power > 100) {
+    left_motor_power = 100;
+  }
+  if (right_motor_power < 0) {
+    right_motor_power = 0;
+  }
+  if (right_motor_power > 100) {
+    right_motor_power = 100;
+  }
+  motorStart(left_motor_power, right_motor_power);
+}
 
-  usReading();
-  processData();
+void loop() {
+  if (readFront) {
+    straighten();
+  }
   readGyro();
 
-  //Serial.print("front reading: ");
-  //Serial.println(frontDistance);
-  //Serial.print("Left back reading: ");
-  //Serial.println(lb_dist);
-  //Serial.println(" ");
-
- // Serial.println(average);
-  if (frontDistance <= stopDistances[turn] && frontDistance > 0 && readFront) {
+  if (UltrasonicFront.Distance() <= stopDistances[turn] && UltrasonicFront.Distance() > 0 && readFront) {
     motorStop();
     startedTurn = true; 
     readFront = false;
-    Serial.println("Stopping");
   }
 
   if (startedTurn) {
     initialAngle = yawAngle;
     timeStarted = millis();
-    Serial.println("Starting turn");
     startedTurn = false;
     stoponeseconds = true;
   }
@@ -251,16 +194,15 @@ void loop()
   }
 
   if (turning) {
-    //Serial.println(yawAngle - initialAngle);
-    if (abs(yawAngle - initialAngle) >= 85) {
+    if (abs(yawAngle - initialAngle) >= 80) {
        motorStop();
        //reInitTOF(FrontTOF, 28, 0x33);
        turning = false; 
        startUp = true;
        readFront = true;
        turn++;
+       adjust_setpoint = sideSetpoints[turn];
        delay(500);
-       Serial.println("Done turn");
     }
   }
 }
